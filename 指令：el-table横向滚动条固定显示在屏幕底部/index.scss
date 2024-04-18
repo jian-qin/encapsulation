@@ -1,0 +1,11 @@
+// el-table横向滚动条固定到屏幕底部
+[v-scrollbar-fixed-table]{
+    &::-webkit-scrollbar {
+        display: none; /* Chrome Safari */
+    }
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE 10+ */
+}
+[v-scrollbar-fixed-table_fixed]{
+    height: 100% !important;
+}
