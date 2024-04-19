@@ -1,0 +1,174 @@
+{
+    "name": "dawn",
+    "displayName": "dawn",
+    "description": "今日买车",
+    "version": "0.0.1",
+    "keywords": [
+        "demo"
+    ],
+    "publisher": "liming",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./main.js",
+    "contributes": {
+        "configuration": {
+            "type": "object",
+            "title": "dawn 配置",
+            "properties": {
+                "dawn.projectList": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number"
+                    },
+                    "default": {
+                        "sk-mp-tool": 3009,
+                        "ruoyi": 3008,
+                        "shenkemall_pc_admin": 3007
+                    },
+                    "markdownDescription": "配置WebSocket服务列表，项目package.json中的name为key，端口号为value。示例：`{\"sk-mp-tool\": 3009}`，修改之后重启生效。"
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "dawn.copy.fileName",
+                "title": "dawn 复制文件名"
+            },
+            {
+                "command": "dawn.copy.relativePath",
+                "title": "dawn 复制相对路径"
+            },
+            {
+                "command": "dawn.copy.absolutePath",
+                "title": "dawn 复制绝对路径"
+            },
+            {
+                "command": "dawn.import.relativePath",
+                "title": "dawn 引入相对路径"
+            },
+            {
+                "command": "dawn.import.absolutePath",
+                "title": "dawn 引入绝对路径"
+            }
+        ],
+        "menus": {
+            "explorer/context": [
+                {
+                    "command": "dawn.copy.fileName",
+                    "group": "z-dawn@1"
+                },
+                {
+                    "command": "dawn.copy.relativePath",
+                    "group": "z-dawn@2"
+                },
+                {
+                    "command": "dawn.copy.absolutePath",
+                    "group": "z-dawn@3"
+                },
+                {
+                    "command": "dawn.import.relativePath",
+                    "group": "z2-dawn@2"
+                },
+                {
+                    "command": "dawn.import.absolutePath",
+                    "group": "z2-dawn@3"
+                }
+            ],
+            "editor/title/context": [
+                {
+                    "command": "dawn.copy.fileName",
+                    "group": "z-dawn@1"
+                },
+                {
+                    "command": "dawn.copy.relativePath",
+                    "group": "z-dawn@2"
+                },
+                {
+                    "command": "dawn.copy.absolutePath",
+                    "group": "z-dawn@3"
+                },
+                {
+                    "command": "dawn.import.relativePath",
+                    "group": "z2-dawn@2"
+                },
+                {
+                    "command": "dawn.import.absolutePath",
+                    "group": "z2-dawn@3"
+                }
+            ]
+        },
+        "keybindings": [
+            {
+                "key": "ctrl+alt+n",
+                "command": "dawn.format.stow",
+                "when": "editorTextFocus"
+            },
+            {
+                "key": "ctrl+alt+m",
+                "command": "dawn.format.expand",
+                "when": "editorTextFocus"
+            },
+            {
+                "key": "alt+l",
+                "command": "dawn.fragment.log",
+                "when": "editorTextFocus"
+            },
+            {
+                "key": "ctrl+alt+l",
+                "command": "dawn.fragment.log.br",
+                "when": "editorTextFocus"
+            },
+            {
+                "command": "dawn.fragment.import",
+                "when": "editorTextFocus"
+            },
+            {
+                "key": "ctrl+alt+u",
+                "command": "dawn.fragment.import.pro",
+                "when": "editorTextFocus"
+            },
+            {
+                "key": "ctrl+alt+a",
+                "command": "dawn.fragment.html",
+                "when": "editorTextFocus"
+            },
+            {
+                "key": "ctrl+alt+c",
+                "command": "dawn.copy.attrs",
+                "when": "editorTextFocus"
+            },
+            {
+                "key": "ctrl+alt+d",
+                "command": "dawn.delete.attrs",
+                "when": "editorTextFocus"
+            }
+        ]
+    },
+    "scripts": {
+        "lint": "eslint .",
+        "pretest": "npm run lint",
+        "test": "node ./test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/mocha": "^10.0.1",
+        "@types/node": "16.x",
+        "@types/vscode": "^1.80.0",
+        "@vscode/test-electron": "^2.3.4",
+        "eslint": "^8.47.0",
+        "glob": "^10.3.3",
+        "mocha": "^10.2.0",
+        "typescript": "^5.1.6"
+    },
+    "dependencies": {
+        "@babel/parser": "^7.23.0",
+        "posthtml-parser": "^0.12.0",
+        "ws": "^8.14.1"
+    }
+}
