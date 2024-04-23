@@ -9,42 +9,38 @@
  * 可以监听一次事件触发，并返回监听器回调函数的返回值：执行一次emit，接受on中回调函数的返回值（不会缓存的emit）；
  */
 export const EventChannel = (() => {
-    /**
-     * @typedef {typeof EventChannel['defaultOptions']} EventChannelOptions 
-     * @typedef {{
-     *      options: Partial<EventChannelOptions>
-     *      optionsMap: Map<any, Partial<EventChannelOptions>>
-     *      listeners: Map<any, Set<Function>>
-     *      emitCaches: Map<any, Set<any[]>>
-     *      watchOffWeakMap: WeakMap<any, Function>
-     *      watchOffMap: Map<any, Function>
-     *      onEmitWeakMap: WeakMap<any[], Function>
-     * }} WmapValue
-     * @typedef {ReturnType<InstanceType<typeof EventChannel>['on']> | ReturnType<InstanceType<typeof EventChannel>['emit']>} IdThis
-     */
+    type EventChannelOptions = typeof EventChannel['defaultOptions']
+    interface WmapValue {
+        options: Partial<EventChannelOptions>
+        optionsMap: Map<any, Partial<EventChannelOptions>>
+        listeners: Map<any, Set<Function>>
+        emitCaches: Map<any, Set<any[]>>
+        watchOffWeakMap: WeakMap<any, Function>
+        watchOffMap: Map<any, Function>
+        onEmitWeakMap: WeakMap<any[], Function>
+    }
+    type IdThis = ReturnType<InstanceType<typeof EventChannel>['on']> | ReturnType<InstanceType<typeof EventChannel>['emit']>
 
     let id = 0
-    /**
-     * @type {WeakMap<InstanceType<typeof EventChannel>, WmapValue>}
-     */
-    const wmap = new WeakMap()
+    const wmap: WeakMap<InstanceType<typeof EventChannel>, WmapValue> = new WeakMap()
 
     /**
      * 获取配置
-     * @template {keyof EventChannelOptions} K
-     * @param {InstanceType<typeof EventChannel>} ctx 事件通道构造器实例
-     * @param {any} eventName 事件名称
-     * @param {K} key 配置键
+     * @param ctx 事件通道构造器实例
+     * @param eventName 事件名称
+     * @param key 配置键
      * @returns 配置值
      * @see
-     * 配置优先级:事件配置 > 默认配置 > 实例配置
+     * 配置优先级：事件配置 > 默认配置 > 实例配置
      */
-    const getOption = (ctx, eventName, key) => {
+    const getOption = <K extends keyof EventChannelOptions>(
+        ctx: InstanceType<typeof EventChannel>,
+        eventName: any,
+        key: K
+    ) => {
         const level0 = EventChannel.defaultOptions
-        // @ts-ignore
-        const level1 = wmap.get(ctx).options
-        // @ts-ignore
-        const level2 = wmap.get(ctx).optionsMap.get(eventName) || {}
+        const level1 = wmap.get(ctx)!.options
+        const level2 = wmap.get(ctx)!.optionsMap.get(eventName) || {}
         if (Object.prototype.hasOwnProperty.call(level2, key)) {
             return level2[key]
         }
@@ -62,13 +58,16 @@ export const EventChannel = (() => {
         }
 
         /**
-         * @param {object} [options] 当前实例配置 
-         * @param {boolean} [options.isEmitCache] 是否缓存未监听的事件
-         * @param {boolean} [options.isEmitOnce] 是否只触发一次事件
-         * @param {boolean} [options.isOnOnce] 是否只监听一次事件
-         * @param {WmapValue['optionsMap']} [optionsMap] 指定事件使用单独配置
+         * @param options 当前实例配置 
+         * @param options.isEmitCache 是否缓存未监听的事件
+         * @param options.isEmitOnce 是否只触发一次事件
+         * @param options.isOnOnce 是否只监听一次事件
+         * @param optionsMap 指定事件使用单独配置
          */
-        constructor(options, optionsMap) {
+        constructor(
+            options?: WmapValue['options'],
+            optionsMap?: WmapValue['optionsMap']
+        ) {
             if (options && typeof options !== 'object') {
                 throw new Error('options必须是对象类型')
             }
@@ -92,22 +91,21 @@ export const EventChannel = (() => {
 
         /**
          * 监听事件
-         * @param {any} eventName 事件名称
-         * @param {Function} cb 回调函数
+         * @param eventName 事件名称
+         * @param cb 回调函数
          * @returns 唯一标识（用于取消监听）
          */
-        on(eventName, cb) {
+        on(eventName: any, cb: Function) {
             if (typeof cb !== 'function') {
                 throw new Error('必须传入回调函数')
             }
-            // @ts-ignore
-            const { listeners, emitCaches, onEmitWeakMap } = wmap.get(this)
+            const { listeners, emitCaches, onEmitWeakMap } = wmap.get(this)!
             listeners.has(eventName) || listeners.set(eventName, new Set())
 
             if (getOption(this, eventName, 'isOnOnce')){
-                listeners.get(eventName).clear()
+                listeners.get(eventName)!.clear()
             }
-            listeners.get(eventName).add(cb)
+            listeners.get(eventName)!.add(cb)
 
             if (getOption(this, eventName, 'isEmitCache')) {
                 const cachesSet = emitCaches.get(eventName)
@@ -129,28 +127,27 @@ export const EventChannel = (() => {
 
         /**
          * 触发事件
-         * @param {any[]} args 事件名称及参数
+         * @param args 事件名称及参数
          * @returns 唯一标识（用于取消监听） 或 null
          */
-        emit(...args) {
+        emit(...args: any[]) {
             if (args.length === 0) {
                 throw new Error('必须传入事件名称')
             }
             const [eventName, ...params] = args
-            // @ts-ignore
-            const { listeners, emitCaches } = wmap.get(this)
+            const { listeners, emitCaches } = wmap.get(this)!
 
             if (listeners.has(eventName)) {
-                listeners.get(eventName).forEach(cb => cb(...params))
+                listeners.get(eventName)!.forEach(cb => cb(...params))
                 return null
             }
 
             if (getOption(this, eventName, 'isEmitCache')) {
                 emitCaches.has(eventName) || emitCaches.set(eventName, new Set())
                 if (getOption(this, eventName, 'isEmitOnce')) {
-                    emitCaches.get(eventName).clear()
+                    emitCaches.get(eventName)!.clear()
                 }
-                emitCaches.get(eventName).add(params)
+                emitCaches.get(eventName)!.add(params)
             }
 
             return params
@@ -158,23 +155,22 @@ export const EventChannel = (() => {
 
         /**
          * 取消监听
-         * @param {(any | IdThis)[]} args 唯一标识或事件名称 的列表
+         * @param args 唯一标识或事件名称 的列表
          */
-        off(...args) {
+        off(...args: (any | IdThis)[]) {
             if (args.length === 0) {
                 throw new Error('至少需要一个参数')
             }
-            // @ts-ignore
-            const { listeners, emitCaches, watchOffWeakMap, watchOffMap, onEmitWeakMap } = wmap.get(this)
-            /**
-             * 代理删除
-             * @param {WmapValue['listeners']
-             *      | WmapValue['emitCaches']
-             *      | NonNullable<ReturnType<WmapValue['listeners']['get']>>
-             *      | NonNullable<ReturnType<WmapValue['emitCaches']['get']>>} MS 
-             * @param {(any | IdThis)[]} _idThis 
-             */
-            const proxyDelete = (MS, _idThis) => {
+            const { listeners, emitCaches, watchOffWeakMap, watchOffMap, onEmitWeakMap } = wmap.get(this)!
+            const proxyDelete = (
+                MS:
+                    | WmapValue['listeners']
+                    | WmapValue['emitCaches']
+                    | NonNullable<ReturnType<WmapValue['listeners']['get']>>
+                    | NonNullable<ReturnType<WmapValue['emitCaches']['get']>>
+                ,
+                _idThis: (any | IdThis)[]
+            ) => {
                 const cb = watchOffWeakMap.get(_idThis) || watchOffMap.get(_idThis)
                 MS.delete(_idThis) && cb && cb()
                 watchOffWeakMap.delete(_idThis)
@@ -203,15 +199,14 @@ export const EventChannel = (() => {
 
         /**
          * 监听销毁
-         * @param {any | IdThis} _idThis 唯一标识或事件名称
-         * @param {Function} cb 回调函数
+         * @param _idThis 唯一标识或事件名称
+         * @param cb 回调函数
          */
-        watchOff(_idThis, cb) {
+        watchOff(_idThis: any | IdThis, cb: Function) {
             if (typeof cb !== 'function') {
                 throw new Error('必须传入回调函数')
             }
-            // @ts-ignore
-            const { watchOffWeakMap, watchOffMap } = wmap.get(this)
+            const { watchOffWeakMap, watchOffMap } = wmap.get(this)!
 
             try{
                 watchOffWeakMap.set(_idThis, cb)
@@ -222,16 +217,13 @@ export const EventChannel = (() => {
 
         /**
          * 只监听一次
-         * @param {any} eventName 事件名称
-         * @param {Function} cb 回调函数
+         * @param eventName 事件名称
+         * @param cb 回调函数
          * @returns 唯一标识（用于取消监听）
          */
-        once(eventName, cb) {
-            /**
-             * @type {Function | null}
-             */
-            let _cb = cb
-            const proxyCb = (...args) => {
+        once(eventName: any, cb: Function) {
+            let _cb: Function | null = cb
+            const proxyCb = (...args: any[]) => {
                 if (_cb) {
                     const val = _cb(...args)
                     _cb = null
@@ -244,35 +236,31 @@ export const EventChannel = (() => {
 
         /**
          * 触发事件，并监听事件的触发
-         * @param {any} eventName 事件名称
-         * @param {[...any[], Function]} args 事件参数及回调函数（最后一个参数必须是回调函数）
+         * @param eventName 事件名称
+         * @param args 事件参数及回调函数（最后一个参数必须是回调函数）
          * @returns 唯一标识（用于取消监听） 或 null
          * @description
          * 回调函数会接收监听器回调函数的返回值
          */
-        onEmit(eventName, ...args) {
+        onEmit(eventName: any, ...args: [...any[], Function]) {
             const params = args.slice(0, -1)
-            /**
-             * @type {Function | undefined}
-             */
-            const cb = args[args.length - 1]
+            const cb: Function | undefined = args[args.length - 1]
             if (typeof cb !== 'function') {
                 throw new Error('必须传入回调函数')
             }
-            // @ts-ignore
-            const { listeners, emitCaches, onEmitWeakMap } = wmap.get(this)
+            const { listeners, emitCaches, onEmitWeakMap } = wmap.get(this)!
 
             if (listeners.has(eventName)) {
-                listeners.get(eventName).forEach(fn => cb(fn(...params)))
+                listeners.get(eventName)!.forEach(fn => cb(fn(...params)))
                 return null
             }
 
             if (getOption(this, eventName, 'isEmitCache')) {
                 emitCaches.has(eventName) || emitCaches.set(eventName, new Set())
                 if (getOption(this, eventName, 'isEmitOnce')) {
-                    emitCaches.get(eventName).clear()
+                    emitCaches.get(eventName)!.clear()
                 }
-                emitCaches.get(eventName).add(params)
+                emitCaches.get(eventName)!.add(params)
                 onEmitWeakMap.set(params, cb)
             }
 
@@ -281,29 +269,20 @@ export const EventChannel = (() => {
 
         /**
          * 触发事件，并监听事件的触发，只触发一次
-         * @param {any} eventName 事件名称
-         * @param {[...any[], Function]} args 事件参数及回调函数（最后一个参数必须是回调函数）
+         * @param eventName 事件名称
+         * @param args 事件参数及回调函数（最后一个参数必须是回调函数）
          * @description
          * 回调函数会接收监听器回调函数的返回值
          */
-        onceEmit(eventName, ...args) {
+        onceEmit(eventName: any, ...args: [...any[], Function]) {
             const params = args.slice(0, -1)
-            /**
-             * @type {Function | undefined}
-             */
-            const cb = args[args.length - 1]
+            const cb: Function | undefined = args[args.length - 1]
             if (typeof cb !== 'function') {
                 throw new Error('必须传入回调函数')
             }
-            /**
-             * @type {Function | null}
-             */
-            let _cb = cb
-            /**
-             * @type {IdThis | undefined}
-             */
-            let _idThis
-            _idThis = this.onEmit(eventName, ...params, (res) => {
+            let _cb: Function | null = cb
+            let _idThis: IdThis | undefined
+            _idThis = this.onEmit(eventName, ...params, (res: any) => {
                 if (_cb) {
                     _cb(res)
                     _cb = null
@@ -314,33 +293,30 @@ export const EventChannel = (() => {
 
         /**
          * 触发事件，返回监听器回调函数的返回值（不会缓存的emit）
-         * @param {any[]} args [事件名称, ...事件参数]
+         * @param args [事件名称, ...事件参数]
          * @returns 监听器回调函数的返回值
          * @description
          * 必须是已注册的事件才能拿到返回值（非缓存的emit）
          */
-        syncEmit(...args) {
+        syncEmit(...args: any[]) {
             if (args.length === 0) {
                 throw new Error('至少需要一个参数')
             }
-            /**
-             * @type {any | undefined}
-             */
-            let val
+            let val: any | undefined
             this.onceEmit(
                 // @ts-ignore
                 ...args,
-                (res) => val = res
+                (res: any) => val = res
             )
             return val
         }
 
         /**
          * 触发事件，返回Promise对象，在监听器触发时把触发器回调函数的返回值传递给Promise对象
-         * @param {any[]} args [事件名称, ...事件参数]
+         * @param args [事件名称, ...事件参数]
          * @returns Promise对象
          */
-        promiseEmit(...args) {
+        promiseEmit(...args: any[]) {
             if (args.length === 0) {
                 throw new Error('至少需要一个参数')
             }
