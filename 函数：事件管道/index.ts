@@ -18,6 +18,7 @@ export const EventChannel = (() => {
         watchOffWeakMap: WeakMap<any, Function>
         watchOffMap: Map<any, Function>
         onEmitWeakMap: WeakMap<any[], Function>
+        promiseEmitWeakMap: WeakMap<Promise<any>, Function>
     }
     type IdThis = ReturnType<InstanceType<typeof EventChannel>['on']> | ReturnType<InstanceType<typeof EventChannel>['emit']>
 
@@ -86,6 +87,7 @@ export const EventChannel = (() => {
                 watchOffWeakMap: new WeakMap(),
                 watchOffMap: new Map(),
                 onEmitWeakMap: new WeakMap(),
+                promiseEmitWeakMap: new WeakMap(),
             })
         }
 
@@ -161,7 +163,7 @@ export const EventChannel = (() => {
             if (args.length === 0) {
                 throw new Error('至少需要一个参数')
             }
-            const { listeners, emitCaches, watchOffWeakMap, watchOffMap, onEmitWeakMap } = wmap.get(this)!
+            const { listeners, emitCaches, watchOffWeakMap, watchOffMap, onEmitWeakMap, promiseEmitWeakMap } = wmap.get(this)!
             const proxyDelete = (
                 MS:
                     | WmapValue['listeners']
@@ -172,9 +174,12 @@ export const EventChannel = (() => {
                 _idThis: (any | IdThis)[]
             ) => {
                 const cb = watchOffWeakMap.get(_idThis) || watchOffMap.get(_idThis)
-                MS.delete(_idThis) && cb && cb()
-                watchOffWeakMap.delete(_idThis)
-                watchOffMap.delete(_idThis)
+                if (MS.has(_idThis) && cb) {
+                    cb()
+                    watchOffWeakMap.delete(_idThis)
+                    watchOffMap.delete(_idThis)
+                }
+                MS.delete(_idThis)
                 onEmitWeakMap.delete(_idThis)
             }
 
@@ -195,12 +200,19 @@ export const EventChannel = (() => {
                 })
                 set.size === 0 && proxyDelete(emitCaches, eventName)
             })
+
+            args.forEach(_idThis => {
+                if (promiseEmitWeakMap.has(_idThis)) {
+                    promiseEmitWeakMap.get(_idThis)!('手动取消Promise')
+                }
+            })
         }
 
         /**
          * 监听销毁
          * @param _idThis 唯一标识或事件名称
          * @param cb 回调函数
+         * @returns 取消监听函数（不使用off方法，防止套娃）
          */
         watchOff(_idThis: any | IdThis, cb: Function) {
             if (typeof cb !== 'function') {
@@ -212,6 +224,11 @@ export const EventChannel = (() => {
                 watchOffWeakMap.set(_idThis, cb)
             } catch (e) {
                 watchOffMap.set(_idThis, cb)
+            }
+
+            return () => {
+                watchOffWeakMap.delete(_idThis)
+                watchOffMap.delete(_idThis)
             }
         }
 
@@ -271,6 +288,7 @@ export const EventChannel = (() => {
          * 触发事件，并监听事件的触发，只触发一次
          * @param eventName 事件名称
          * @param args 事件参数及回调函数（最后一个参数必须是回调函数）
+         * @returns 唯一标识（用于取消监听） 或 null
          * @description
          * 回调函数会接收监听器回调函数的返回值
          */
@@ -289,6 +307,7 @@ export const EventChannel = (() => {
                     _idThis && this.off(_idThis)
                 }
             })
+            return _idThis
         }
 
         /**
@@ -303,11 +322,12 @@ export const EventChannel = (() => {
                 throw new Error('至少需要一个参数')
             }
             let val: any | undefined
-            this.onceEmit(
+            const _idThis = this.onceEmit(
                 // @ts-ignore
                 ...args,
                 (res: any) => val = res
             )
+            _idThis && this.off(_idThis)
             return val
         }
 
@@ -320,13 +340,34 @@ export const EventChannel = (() => {
             if (args.length === 0) {
                 throw new Error('至少需要一个参数')
             }
-            return new Promise(resolve => {
-                this.onceEmit(
+            const { promiseEmitWeakMap } = wmap.get(this)!
+            let cancel: Function | undefined
+
+            const pm = new Promise((resolve, reject) => {
+                let unwatchOff: Function | undefined
+                const _idThis = this.onceEmit(
                     // @ts-ignore
                     ...args,
-                    resolve,
+                    (res: any) => {
+                        resolve(res)
+                        unwatchOff && unwatchOff()
+                    },
                 )
+
+                if (_idThis) {
+                    unwatchOff = this.watchOff(_idThis, () => reject('手动取消Promise'))
+                    cancel = (err: string) => {
+                        reject(err)
+                        unwatchOff!()
+                        this.off(_idThis)
+                    }
+                }
             })
+
+            cancel && promiseEmitWeakMap.set(pm, cancel)
+            pm.finally(() => promiseEmitWeakMap.delete(pm))
+
+            return pm
         }
 
     }

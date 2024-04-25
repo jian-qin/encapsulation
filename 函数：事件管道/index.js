@@ -19,6 +19,7 @@ export const EventChannel = (() => {
      *      watchOffWeakMap: WeakMap<any, Function>
      *      watchOffMap: Map<any, Function>
      *      onEmitWeakMap: WeakMap<any[], Function>
+     *      promiseEmitWeakMap: WeakMap<Promise<any>, Function>
      * }} WmapValue
      * @typedef {ReturnType<InstanceType<typeof EventChannel>['on']> | ReturnType<InstanceType<typeof EventChannel>['emit']>} IdThis
      */
@@ -41,10 +42,8 @@ export const EventChannel = (() => {
      */
     const getOption = (ctx, eventName, key) => {
         const level0 = EventChannel.defaultOptions
-        // @ts-ignore
-        const level1 = wmap.get(ctx).options
-        // @ts-ignore
-        const level2 = wmap.get(ctx).optionsMap.get(eventName) || {}
+        const level1 = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(ctx)).options
+        const level2 = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(ctx)).optionsMap.get(eventName) || {}
         if (Object.prototype.hasOwnProperty.call(level2, key)) {
             return level2[key]
         }
@@ -87,6 +86,7 @@ export const EventChannel = (() => {
                 watchOffWeakMap: new WeakMap(),
                 watchOffMap: new Map(),
                 onEmitWeakMap: new WeakMap(),
+                promiseEmitWeakMap: new WeakMap(),
             })
         }
 
@@ -100,14 +100,13 @@ export const EventChannel = (() => {
             if (typeof cb !== 'function') {
                 throw new Error('必须传入回调函数')
             }
-            // @ts-ignore
-            const { listeners, emitCaches, onEmitWeakMap } = wmap.get(this)
+            const { listeners, emitCaches, onEmitWeakMap } = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(this))
             listeners.has(eventName) || listeners.set(eventName, new Set())
 
             if (getOption(this, eventName, 'isOnOnce')){
-                listeners.get(eventName).clear()
+                /**@type {NonNullable<ReturnType<typeof listeners['get']>>}*/ (listeners.get(eventName)).clear()
             }
-            listeners.get(eventName).add(cb)
+            /**@type {NonNullable<ReturnType<typeof listeners['get']>>}*/ (listeners.get(eventName)).add(cb)
 
             if (getOption(this, eventName, 'isEmitCache')) {
                 const cachesSet = emitCaches.get(eventName)
@@ -137,20 +136,19 @@ export const EventChannel = (() => {
                 throw new Error('必须传入事件名称')
             }
             const [eventName, ...params] = args
-            // @ts-ignore
-            const { listeners, emitCaches } = wmap.get(this)
+            const { listeners, emitCaches } = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(this))
 
             if (listeners.has(eventName)) {
-                listeners.get(eventName).forEach(cb => cb(...params))
+                /**@type {NonNullable<ReturnType<typeof listeners['get']>>}*/ (listeners.get(eventName)).forEach(cb => cb(...params))
                 return null
             }
 
             if (getOption(this, eventName, 'isEmitCache')) {
                 emitCaches.has(eventName) || emitCaches.set(eventName, new Set())
                 if (getOption(this, eventName, 'isEmitOnce')) {
-                    emitCaches.get(eventName).clear()
+                    /**@type {NonNullable<ReturnType<typeof emitCaches['get']>>}*/ (emitCaches.get(eventName)).clear()
                 }
-                emitCaches.get(eventName).add(params)
+                /**@type {NonNullable<ReturnType<typeof emitCaches['get']>>}*/ (emitCaches.get(eventName)).add(params)
             }
 
             return params
@@ -164,8 +162,7 @@ export const EventChannel = (() => {
             if (args.length === 0) {
                 throw new Error('至少需要一个参数')
             }
-            // @ts-ignore
-            const { listeners, emitCaches, watchOffWeakMap, watchOffMap, onEmitWeakMap } = wmap.get(this)
+            const { listeners, emitCaches, watchOffWeakMap, watchOffMap, onEmitWeakMap, promiseEmitWeakMap } = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(this))
             /**
              * 代理删除
              * @param {WmapValue['listeners']
@@ -176,9 +173,12 @@ export const EventChannel = (() => {
              */
             const proxyDelete = (MS, _idThis) => {
                 const cb = watchOffWeakMap.get(_idThis) || watchOffMap.get(_idThis)
-                MS.delete(_idThis) && cb && cb()
-                watchOffWeakMap.delete(_idThis)
-                watchOffMap.delete(_idThis)
+                if (MS.has(_idThis) && cb) {
+                    cb()
+                    watchOffWeakMap.delete(_idThis)
+                    watchOffMap.delete(_idThis)
+                }
+                MS.delete(_idThis)
                 onEmitWeakMap.delete(_idThis)
             }
 
@@ -199,24 +199,35 @@ export const EventChannel = (() => {
                 })
                 set.size === 0 && proxyDelete(emitCaches, eventName)
             })
+
+            args.forEach(_idThis => {
+                if (promiseEmitWeakMap.has(_idThis)) {
+                    /**@type {NonNullable<ReturnType<typeof promiseEmitWeakMap['get']>>}*/ (promiseEmitWeakMap.get(_idThis))('手动取消Promise')
+                }
+            })
         }
 
         /**
          * 监听销毁
          * @param {any | IdThis} _idThis 唯一标识或事件名称
          * @param {Function} cb 回调函数
+         * @returns 取消监听函数（不使用off方法，防止套娃）
          */
         watchOff(_idThis, cb) {
             if (typeof cb !== 'function') {
                 throw new Error('必须传入回调函数')
             }
-            // @ts-ignore
-            const { watchOffWeakMap, watchOffMap } = wmap.get(this)
+            const { watchOffWeakMap, watchOffMap } = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(this))
 
             try{
                 watchOffWeakMap.set(_idThis, cb)
             } catch (e) {
                 watchOffMap.set(_idThis, cb)
+            }
+
+            return () => {
+                watchOffWeakMap.delete(_idThis)
+                watchOffMap.delete(_idThis)
             }
         }
 
@@ -259,20 +270,19 @@ export const EventChannel = (() => {
             if (typeof cb !== 'function') {
                 throw new Error('必须传入回调函数')
             }
-            // @ts-ignore
-            const { listeners, emitCaches, onEmitWeakMap } = wmap.get(this)
+            const { listeners, emitCaches, onEmitWeakMap } = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(this))
 
             if (listeners.has(eventName)) {
-                listeners.get(eventName).forEach(fn => cb(fn(...params)))
+                /**@type {NonNullable<ReturnType<typeof listeners['get']>>}*/ (listeners.get(eventName)).forEach(fn => cb(fn(...params)))
                 return null
             }
 
             if (getOption(this, eventName, 'isEmitCache')) {
                 emitCaches.has(eventName) || emitCaches.set(eventName, new Set())
                 if (getOption(this, eventName, 'isEmitOnce')) {
-                    emitCaches.get(eventName).clear()
+                    /**@type {NonNullable<ReturnType<typeof emitCaches['get']>>}*/ (emitCaches.get(eventName)).clear()
                 }
-                emitCaches.get(eventName).add(params)
+                /**@type {NonNullable<ReturnType<typeof emitCaches['get']>>}*/ (emitCaches.get(eventName)).add(params)
                 onEmitWeakMap.set(params, cb)
             }
 
@@ -283,6 +293,7 @@ export const EventChannel = (() => {
          * 触发事件，并监听事件的触发，只触发一次
          * @param {any} eventName 事件名称
          * @param {[...any[], Function]} args 事件参数及回调函数（最后一个参数必须是回调函数）
+         * @returns 唯一标识（用于取消监听） 或 null
          * @description
          * 回调函数会接收监听器回调函数的返回值
          */
@@ -310,6 +321,7 @@ export const EventChannel = (() => {
                     _idThis && this.off(_idThis)
                 }
             })
+            return _idThis
         }
 
         /**
@@ -327,11 +339,12 @@ export const EventChannel = (() => {
              * @type {any | undefined}
              */
             let val
-            this.onceEmit(
+            const _idThis = this.onceEmit(
                 // @ts-ignore
                 ...args,
                 (res) => val = res
             )
+            _idThis && this.off(_idThis)
             return val
         }
 
@@ -344,13 +357,37 @@ export const EventChannel = (() => {
             if (args.length === 0) {
                 throw new Error('至少需要一个参数')
             }
-            return new Promise(resolve => {
-                this.onceEmit(
+            const { promiseEmitWeakMap } = /**@type {NonNullable<ReturnType<typeof wmap['get']>>}*/ (wmap.get(this))
+            /**
+             * @type {Function | undefined}
+             */
+            let cancel
+
+            const pm = new Promise((resolve, reject) => {
+                let unwatchOff
+                const _idThis = this.onceEmit(
                     // @ts-ignore
                     ...args,
-                    resolve,
+                    (res) => {
+                        resolve(res)
+                        unwatchOff && unwatchOff()
+                    },
                 )
+
+                if (_idThis) {
+                    unwatchOff = this.watchOff(_idThis, () => reject('手动取消Promise'))
+                    cancel = (err) => {
+                        reject(err)
+                        unwatchOff()
+                        this.off(_idThis)
+                    }
+                }
             })
+
+            cancel && promiseEmitWeakMap.set(pm, cancel)
+            pm.finally(() => promiseEmitWeakMap.delete(pm))
+
+            return pm
         }
 
     }
