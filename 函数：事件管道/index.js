@@ -109,8 +109,9 @@ export const EventChannel = (() => {
             /**@type {NonNullable<ReturnType<typeof listeners['get']>>}*/ (listeners.get(eventName)).add(cb)
 
             if (getOption(this, eventName, 'isEmitCache')) {
-                const cachesSet = emitCaches.get(eventName)
-                if (cachesSet) {
+                Promise.resolve().then(() => {
+                    const cachesSet = emitCaches.get(eventName)
+                    if (!cachesSet) return
                     cachesSet.forEach(args => {
                         const val = cb(...args)
                         const fn = onEmitWeakMap.get(args)
@@ -120,7 +121,7 @@ export const EventChannel = (() => {
                         }
                     })
                     emitCaches.delete(eventName)
-                }
+                })
             }
 
             return cb

@@ -110,8 +110,9 @@ export const EventChannel = (() => {
             listeners.get(eventName)!.add(cb)
 
             if (getOption(this, eventName, 'isEmitCache')) {
-                const cachesSet = emitCaches.get(eventName)
-                if (cachesSet) {
+                Promise.resolve().then(() => {
+                    const cachesSet = emitCaches.get(eventName)
+                    if (!cachesSet) return
                     cachesSet.forEach(args => {
                         const val = cb(...args)
                         const fn = onEmitWeakMap.get(args)
@@ -121,7 +122,7 @@ export const EventChannel = (() => {
                         }
                     })
                     emitCaches.delete(eventName)
-                }
+                })
             }
 
             return cb
@@ -300,6 +301,7 @@ export const EventChannel = (() => {
             }
             let _cb: Function | null = cb
             let _idThis: IdThis | undefined
+            // eslint-disable-next-line prefer-const
             _idThis = this.onEmit(eventName, ...params, (res: any) => {
                 if (_cb) {
                     _cb(res)
